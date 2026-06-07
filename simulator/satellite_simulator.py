@@ -2,7 +2,7 @@ import requests
 import random
 import time
 
-API_URL = "http://127.0.0.1:8000/telemetry"
+API_URL = "http://127.0.0.1:8001/telemetry"
 
 while True:
 
