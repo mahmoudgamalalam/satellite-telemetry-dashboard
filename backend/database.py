@@ -1,17 +1,17 @@
-from sqlalchemy import Column, Integer, String, Float
-from .database import Base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 
+DATABASE_URL = "sqlite:///telemetry.db"
 
-class TelemetryRecord(Base):
-    __tablename__ = "telemetry"
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
 
-    id = Column(Integer, primary_key=True, index=True)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
 
-    satellite_id = Column(String)
-    battery = Column(Float)
-    temperature = Column(Float)
-    signal_strength = Column(Float)
-    status = Column(String)
-
-    alerts = Column(String)
-    timestamp = Column(String)
+Base = declarative_base()

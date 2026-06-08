@@ -1,10 +1,14 @@
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 from datetime import datetime
 
+from .database import SessionLocal, engine, Base
+from .models import TelemetryRecord
+
 app = FastAPI()
 
-telemetry_store = []
+Base.metadata.create_all(bind=engine)
 
 
 class Telemetry(BaseModel):
@@ -37,28 +41,73 @@ def home():
 
 @app.post("/telemetry")
 def receive_telemetry(data: Telemetry):
-    record = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "data": data.dict(),
-        "alerts": check_alerts(data)
-    }
+    alerts = check_alerts(data)
 
-    telemetry_store.append(record)
+    db = SessionLocal()
+
+    record = TelemetryRecord(
+        satellite_id=data.satellite_id,
+        battery=data.battery,
+        temperature=data.temperature,
+        signal_strength=data.signal_strength,
+        status=data.status,
+        alerts=",".join(alerts),
+        timestamp=datetime.utcnow().isoformat()
+    )
+
+    db.add(record)
+    db.commit()
+    db.close()
 
     return {
         "message": "Telemetry received",
-        "alerts": record["alerts"]
+        "alerts": alerts
     }
 
 
 @app.get("/telemetry/latest")
 def get_latest_telemetry():
-    if not telemetry_store:
+    db = SessionLocal()
+
+    latest = db.query(TelemetryRecord).order_by(TelemetryRecord.id.desc()).first()
+
+    db.close()
+
+    if latest is None:
         return {"message": "No telemetry received yet"}
 
-    return telemetry_store[-1]
+    return {
+        "timestamp": latest.timestamp,
+        "data": {
+            "satellite_id": latest.satellite_id,
+            "battery": latest.battery,
+            "temperature": latest.temperature,
+            "signal_strength": latest.signal_strength,
+            "status": latest.status
+        },
+        "alerts": latest.alerts.split(",") if latest.alerts else []
+    }
 
 
 @app.get("/telemetry/history")
 def get_history():
-    return telemetry_store
+    db = SessionLocal()
+
+    records = db.query(TelemetryRecord).order_by(TelemetryRecord.id.desc()).limit(20).all()
+
+    db.close()
+
+    return [
+        {
+            "timestamp": record.timestamp,
+            "data": {
+                "satellite_id": record.satellite_id,
+                "battery": record.battery,
+                "temperature": record.temperature,
+                "signal_strength": record.signal_strength,
+                "status": record.status
+            },
+            "alerts": record.alerts.split(",") if record.alerts else []
+        }
+        for record in records
+    ]
